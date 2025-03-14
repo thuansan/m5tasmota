@@ -108,7 +108,7 @@
 // Structs
 #include "include/tasmota_types.h"
 #ifdef USE_DHT20
-  #include "xsns_49_dht20.ino"   
+  #include "xsns_118_dht20.ino"   
 #endif
 
 
