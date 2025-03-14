@@ -1,6 +1,6 @@
 #ifdef USE_I2C
 #ifdef USE_DHT20
-#define XSNS_49               49
+#define XSNS_118              118
 #define XI2C_42               42  // định danh thiết bị I2C cho DHT20 (có thể đặt theo nhu cầu)
 
 #define DHT20_ADDR            0x38
@@ -84,7 +84,7 @@ void Dht20Show(bool json)
   }
 }
 
-bool Xsns49(uint32_t function)
+bool Xsns118(uint32_t function)
 {
   if (!I2cEnabled(XI2C_42)) return false;
 
