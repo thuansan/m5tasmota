@@ -695,8 +695,9 @@
 //    #define PCF8574_ADDR1_COUNT 7                // Number of addresses to search for PCF8574 - Default to 0x20 to 0x26
 //    #define PCF8574_ADDR2 0x39                   // First address to search for PCF8574A
 //    #define PCF8574_ADDR2_COUNT 6                // Number of addresses to search for PCF8574A - Default to 0x39 to 0x3E
-//  #define USE_HIH6                               // [I2cDriver36] Enable Honeywell HIH Humidity and Temperature sensor (I2C address 0x27) (+0k6)
-//  #define USE_DHT12                              // [I2cDriver41] Enable DHT12 humidity and temperature sensor (I2C address 0x5C) (+0k7 code)
+//  #define USE_HIH6      
+    #define USE_DHT                         // [I2cDriver36] Enable Honeywell HIH Humidity and Temperature sensor (I2C address 0x27) (+0k6)
+    #define USE_DHT12                              // [I2cDriver41] Enable DHT12 humidity and temperature sensor (I2C address 0x5C) (+0k7 code)
     #define USE_DHT20
 //  #define USE_DS1624                             // [I2cDriver42] Enable DS1624, DS1621 temperature sensor (I2C addresses 0x48 - 0x4F) (+1k2 code)
 //  #define USE_AHT1x                              // [I2cDriver43] Enable AHT10/15 humidity and temperature sensor (I2C address 0x38, 0x39) (+0k8 code)
