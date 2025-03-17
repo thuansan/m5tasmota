@@ -302,14 +302,14 @@ static lv_fs_res_t lvbe_fs_size(lv_fs_drv_t * drv, void * file_p, uint32_t * siz
  * Use PSRAM if available
 \*********************************************************************************************/
 extern "C" {
-  /*
-  Use the following
+  
+  //Use the following
 
-  extern void *lvbe_malloc(size_t size);
-  extern void  lvbe_free(void *ptr);
-  extern void *lvbe_realloc(void *ptr, size_t size);
-  extern void *lvbe_calloc(size_t num, size_t size);
-  */
+  // extern void *lvbe_malloc(size_t size);
+  // extern void  lvbe_free(void *ptr);
+  // extern void *lvbe_realloc(void *ptr, size_t size);
+  // extern void *lvbe_calloc(size_t num, size_t size);
+  
   void *lvbe_malloc(uint32_t size);
   void *lvbe_realloc(void *ptr, size_t size);
   void *lvbe_calloc(size_t num, size_t size);
