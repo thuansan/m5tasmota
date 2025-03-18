@@ -1,9 +1,12 @@
+// xdrv_99_m5stack_4relay.ino 
+#ifdef USE_I2C
 #ifdef USE_M5STACK_4RELAY
 #define XDRV_99 99
 
 #include <Wire.h>
 
-#define M5RELAY_I2C_ADDR 0x26 // Change to 0x38 if needed
+
+#define M5RELAY_I2C_ADDR 0x26 
 uint8_t m5relay_state = 0x00;
 
 bool CmndM5Relay(void);
@@ -34,16 +37,20 @@ bool CmndM5Relay(void) {
   return true;
 }
 
-bool Xdrv99(uint8_t function) {
-  switch (function) {
-    case FUNC_PRE_INIT:
-      M5Relay_Init();
-      break;
-    case FUNC_COMMAND:
-      CmndRegister("M5Relay", CmndM5Relay);
-      break;
+bool Xdrv99(uint32_t function) {
+    switch (function) {
+      case FUNC_PRE_INIT:
+        M5Relay_Init();
+        break;
+      case FUNC_COMMAND:
+        if (strncasecmp_P(XdrvMailbox.command, PSTR("M5Relay"), 7) == 0) {
+          CmndM5Relay();
+        }
+        break;
+    }
+    return false;
   }
-  return false;
-}
+  
 
 #endif // USE_M5STACK_4RELAY
+#endif
