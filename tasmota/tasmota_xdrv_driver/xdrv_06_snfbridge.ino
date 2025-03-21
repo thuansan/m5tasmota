@@ -517,7 +517,6 @@ void CmndRfTimeout(void) {
 
 #ifdef USE_WEBSERVER
 #ifndef FIRMWARE_MINIMAL
-
 void SonoffBridgeAddButton(void) {
   WSContentSend_P(HTTP_TABLE100);
   WSContentSend_P(PSTR("<tr>"));
@@ -543,7 +542,6 @@ void SonoffBridgeWebGetArg(void) {
     ExecuteWebCommand(command);
   }
 }
-
 #endif  // not FIRMWARE_MINIMAL
 #endif  // USE_WEBSERVER
 
