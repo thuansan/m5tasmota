@@ -5,13 +5,10 @@
 
 #define DHT20_ADDR            0x38
 
-struct DHT20 {
-  float   temperature = NAN;
-  float   humidity = NAN;
-  uint8_t valid = 0;
-  uint8_t count = 0;
-  char    name[6] = "DHT20";
-} Dht20;
+#include "dht20.h"
+
+DHT20 Dht20 = {NAN, NAN, 0, 0, "DHT20"};  // Khởi tạo giá trị mặc định
+
 
 bool Dht20Read(void)
 {

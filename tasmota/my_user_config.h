@@ -820,6 +820,8 @@
 // -- Universal Display Driver ---------------------------------
 #define USE_UNIVERSAL_DISPLAY                   // New universal display driver for both I2C and SPI
 #define MAX_TOUCH_BUTTONS 16                 // Virtual touch buttons
+#define USE_UNIVERSAL_TOUCH
+
 
 // -- SPI sensors ---------------------------------
 //#define USE_SPI                                  // Hardware SPI using GPIO12(MISO), GPIO13(MOSI) and GPIO14(CLK) in addition to two user selectable GPIOs(CS and DC)
@@ -832,8 +834,8 @@
 //    #define USE_DISPLAY_EPAPER_29                // [DisplayModel 5] Enable e-paper 2.9 inch display (+19k code)
 //    #define USE_DISPLAY_EPAPER_42                // [DisplayModel 6] Enable e-paper 4.2 inch display
     // REMOVED -- #define USE_DISPLAY_SSD1351                  // [DisplayModel 9] Enable SSD1351 module
-//    #define USE_DISPLAY_RA8876                   // [DisplayModel 10] [I2cDriver39] (Touch)
-//    #define USE_DISPLAY_ST7789                   // [DisplayModel 12] Enable ST7789 module
+   #define USE_DISPLAY_RA8876                   // [DisplayModel 10] [I2cDriver39] (Touch)
+   #define USE_DISPLAY_ST7789                   // [DisplayModel 12] Enable ST7789 module
     // REMOVED -- #define USE_DISPLAY_SSD1331                  // [DisplayModel 14] Enable SSD1331 module
 //  #define USE_RC522                              // Add support for MFRC522 13.56Mhz Rfid reader (+6k code)
 //    #define USE_RC522_DATA_FUNCTION              // Add support for reading data block content (+0k4 code)
