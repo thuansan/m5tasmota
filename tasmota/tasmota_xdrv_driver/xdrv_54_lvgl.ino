@@ -31,6 +31,15 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
+
+#include "image/image_resource.h"
+#include "dht20.h"
+#include "time.h"
+#include "lv_timer.h"
+
+
+
+
 // callback type when a screen paint is done
 typedef void (*lv_paint_cb_t)(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t *pixels);
 
@@ -44,6 +53,178 @@ struct LVGL_Glue {
   lv_paint_cb_t paint_cb = nullptr;
 };
 LVGL_Glue * lvgl_glue;
+
+
+// >>>> CODE ADDITION <<<<
+extern struct DHT20 Dht20;
+
+lv_obj_t *wifi_icon;
+lv_obj_t *time_label;
+static lv_obj_t *temp_label;
+
+void update_time_label(lv_timer_t *timer);  // Khai báo prototype
+
+void CustomLVGL_InitUI() {
+ 
+    /*Create a Tab view object*/
+  lv_obj_t * tabview;
+  tabview = lv_tabview_create(lv_scr_act());
+
+  // Ẩn thanh tab để tiết kiệm không gian
+  lv_obj_add_flag(lv_tabview_get_tab_bar(tabview), LV_OBJ_FLAG_HIDDEN);
+
+  // Cho phép vuốt màn hình để chuyển tab
+  lv_obj_add_flag(tabview, LV_OBJ_FLAG_GESTURE_BUBBLE);
+
+    /*3 tabs*/
+  lv_obj_t * tab1 = lv_tabview_add_tab(tabview, "Tab 1");
+  lv_obj_t * tab2 = lv_tabview_add_tab(tabview, "Tab 2");
+  lv_obj_t * tab3 = lv_tabview_add_tab(tabview, "Tab 3");
+  
+
+// thanh bar
+  lv_obj_t *top_bar = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(top_bar, LV_HOR_RES, 35);  
+  lv_obj_set_style_bg_color(top_bar, lv_color_hex(0x4A90E2), 0);  
+  lv_obj_set_style_bg_opa(top_bar, LV_OPA_COVER, 0);
+  lv_obj_set_align(top_bar, LV_ALIGN_TOP_MID);  
+
+    //hiển thị thời gian
+  lv_obj_t *time_container = lv_obj_create(top_bar);
+  lv_obj_set_size(time_container, 200, 30);  
+  lv_obj_set_style_pad_all(time_container, 0, 0);
+  lv_obj_set_style_border_opa(time_container, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_shadow_opa(time_container, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_opa(time_container, LV_OPA_TRANSP, 0);
+  lv_obj_align(time_container, LV_ALIGN_TOP_LEFT, -10, 5);
+
+  time_label = lv_label_create(time_container);
+  lv_obj_align(time_label, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_set_style_text_font(time_label, &lv_font_montserrat_20, 0); 
+  lv_timer_create(update_time_label, 1000, NULL);
+
+  // wifi
+  lv_obj_t *wifi_container = lv_obj_create(top_bar);
+  lv_obj_set_size(wifi_container, 30, 30);  
+  lv_obj_set_style_pad_all(wifi_container, 0, 0);
+  lv_obj_set_style_border_opa(wifi_container, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_shadow_opa(wifi_container, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_opa(wifi_container, LV_OPA_TRANSP, 0);
+  lv_obj_align(wifi_container, LV_ALIGN_TOP_RIGHT, -10, 5);
+
+  wifi_icon = lv_img_create(wifi_container);
+  lv_obj_align(wifi_icon, LV_ALIGN_CENTER, 0, 0);
+
+  //--------------Trang 1:-------------------
+  lv_obj_t *screen1;
+  screen1 = lv_obj_create(tab1);
+  lv_obj_set_size(screen1, 310, 480);
+  lv_obj_set_style_bg_color(screen1, lv_color_hex(0x201861), LV_PART_MAIN);
+  lv_obj_align(screen1, LV_ALIGN_TOP_LEFT, -15, -15);
+
+  lv_obj_t *rect1 = lv_obj_create(tab1);
+  lv_obj_set_size(rect1, 160, 95);
+  lv_obj_set_style_bg_color(rect1, lv_color_hex(0x2379F1), 0); // Temp
+  lv_obj_set_style_radius(rect1, 15, 0);
+  lv_obj_align(rect1, LV_ALIGN_TOP_LEFT, 5, 25);
+
+
+  lv_obj_t *temp_label = lv_label_create(rect1);
+  lv_obj_set_style_text_font(temp_label, &lv_font_montserrat_22, 0);
+  lv_obj_align(temp_label, LV_ALIGN_LEFT_MID, 5, -5);
+
+  lv_obj_t *dash = lv_label_create(rect1);
+  lv_label_set_text(dash, "         |");
+  lv_obj_set_style_text_font(dash, &lv_font_montserrat_22, 0);
+  lv_obj_align(dash, LV_ALIGN_LEFT_MID, 5, 0);
+
+  lv_obj_t *weather_icon = lv_img_create(rect1);
+  lv_img_set_src(weather_icon, &weathe);  
+  lv_obj_align(weather_icon, LV_ALIGN_RIGHT_MID, -5, -2);
+
+
+  lv_obj_t *rect2 = lv_obj_create(tab1);
+  lv_obj_set_size(rect2, 110, 95);
+  lv_obj_set_style_bg_color(rect2, lv_color_hex(0x46DCAE), 0); // green
+  lv_obj_set_style_radius(rect2, 15, 0);
+  lv_obj_align(rect2, LV_ALIGN_TOP_RIGHT, -5, 25);
+
+  lv_obj_t *rect3 = lv_obj_create(tab1);
+  lv_obj_set_size(rect3, 140, 95);
+  lv_obj_set_style_bg_color(rect3, lv_color_hex(0x49BAEC), 0); // blue
+  lv_obj_set_style_radius(rect3, 15, 0);
+  lv_obj_align(rect3, LV_ALIGN_BOTTOM_LEFT, 5, 5);
+
+  lv_obj_t *rect4 = lv_obj_create(tab1);
+  lv_obj_set_size(rect4, 130, 95);
+  lv_obj_set_style_bg_color(rect4, lv_color_hex(0x8990F2), 0); // tím
+  lv_obj_set_style_radius(rect4, 15, 0);
+  lv_obj_align(rect4, LV_ALIGN_BOTTOM_RIGHT, -5, 5);
+
+  //--------------Trang 2:-------------------
+  lv_obj_t *screen2;
+  screen2 = lv_obj_create(tab2);
+  lv_obj_set_size(screen2, 320, 480);
+  lv_obj_set_style_bg_color(screen2, lv_color_hex(0x243061), LV_PART_MAIN);
+  lv_obj_align(screen2, LV_ALIGN_TOP_LEFT, -15, -15);
+
+
+  update_wifi_icon(); 
+  update_temp_label();
+
+}
+
+// Hàm cập nhật nhiệt độ
+void update_temp_label() {
+  if (Dht20.valid) {  
+      char temp_str[32];
+      snprintf(temp_str, sizeof(temp_str), "%.1f°C |", Dht20.temperature);
+      lv_label_set_text(temp_label, temp_str);
+  }
+}
+
+int get_wifi_signal_strength() {
+  int rssi = WiFi.RSSI();
+    
+    if (rssi > -50) return 4;  
+    if (rssi > -60) return 3;  
+    if (rssi > -70) return 2;    
+    return 1;  
+    
+}
+
+void update_time_label(lv_timer_t *timer) {
+  setenv("TZ", "UTC-7", 1);  
+  tzset();
+  char time_str[32];
+  time_t now;
+  struct tm timeinfo;
+  time(&now);
+  localtime_r(&now, &timeinfo);
+  
+  snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  lv_label_set_text(time_label, time_str);
+}
+
+void update_wifi_icon() {
+    int signal_level = get_wifi_signal_strength();
+    
+    switch(signal_level) {
+        case 4: lv_img_set_src(wifi_icon, &W4); break;
+        case 3: lv_img_set_src(wifi_icon, &W3); break;
+        case 2: lv_img_set_src(wifi_icon, &W2); break;
+        default: lv_img_set_src(wifi_icon, &W1); break;
+    }
+}
+
+
+// This function can be called from your setup or init phase
+void CustomLVGL_Initialize() {
+  if (lvgl_glue && lvgl_glue->lv_display) {
+    CustomLVGL_InitUI();
+  }
+}
+// >>>> END CUSTOM CODE ADDITION <<<<
 
 // **************************************************
 // Logging
@@ -564,25 +745,34 @@ File * lvgl_get_screenshot_file(void) {
  * Interface
 \*********************************************************************************************/
 
+// Driver initialization function
+void LvglDrvInit(void) {
+  AddLog(LOG_LEVEL_INFO, PSTR("LVGL Driver Init"));
+  CustomLVGL_Initialize();
+}
+
+// Driver loop function (if needed)
+void LvglDrvLoop(void) {
+  lv_tick_inc(5);         // Adjust this value based on loop interval
+  lv_timer_handler();
+}
+
+// Register the driver with Tasmota
+
 bool Xdrv54(uint32_t function) {
   bool result = false;
 
   switch (function) {
+    case FUNC_INIT:
+      LvglDrvInit();
+      break;
     case FUNC_LOOP:
-      if (lvgl_glue) {
-        if (TasmotaGlobal.sleep > USE_LVGL_MAX_SLEEP) {
-          TasmotaGlobal.sleep = USE_LVGL_MAX_SLEEP;   // sleep is max 10ms
-        }
-        lv_task_handler();
-      }
+      LvglDrvLoop();
       break;
-    case FUNC_ACTIVE:
-      result = true;
-      break;
-
   }
-  return result;
+  return false;
 }
+
 
 #endif  // defined(USE_LVGL) && defined(USE_UNIVERSAL_DISPLAY)
 #endif  // ESP32
