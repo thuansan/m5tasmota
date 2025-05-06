@@ -5,10 +5,9 @@
 
 #define DHT20_ADDR            0x38
 
-#include "dht20.h"
+#include "sensor_data.h"
 
-DHT20 Dht20 = {NAN, NAN, 0, 0, "DHT20"};  // Khởi tạo giá trị mặc định
-
+DHT20 Dht20 = {41, 50, 1, 1, "DHT20"};  
 
 bool Dht20Read(void)
 {
@@ -73,6 +72,8 @@ void Dht20EverySecond(void)
     }
   }
 }
+
+
 
 void Dht20Show(bool json)
 {

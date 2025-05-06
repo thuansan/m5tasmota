@@ -30,17 +30,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include <ArduinoJson.h>
 
 
 #include "image/image_resource.h"
-#include "dht20.h"
+#include "sensor_data.h"
 #include "time.h"
 #include "lv_timer.h"
 
 
 
-
-// callback type when a screen paint is done
+//callback type when a screen paint is done
 typedef void (*lv_paint_cb_t)(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t *pixels);
 
 struct LVGL_Glue {
@@ -55,146 +55,467 @@ struct LVGL_Glue {
 LVGL_Glue * lvgl_glue;
 
 
-// >>>> CODE ADDITION <<<<
-extern struct DHT20 Dht20;
+// >>>> CODE ADD <<<<
+
+ extern DHT20 Dht20;
+
 
 lv_obj_t *wifi_icon;
 lv_obj_t *time_label;
 static lv_obj_t *temp_label;
+static lv_obj_t *humi_label;
+static lv_obj_t *so2_label;
+static lv_obj_t *ac_label;
+static lv_obj_t *co_label;
+static lv_obj_t *no2_label;
+static lv_obj_t *ozone_label;
 
-void update_time_label(lv_timer_t *timer);  // Khai báo prototype
+String latest_alert_msg = "";
+
+
+void update_time_label(lv_timer_t *timer);  
+void sensor_check_task(lv_timer_t *timer);
+void create_relay_controls(lv_obj_t *parent);
+
+bool is_alert_active = false;
+
+void LvglMqttSubscribe() {
+  MqttSubscribe("v1/devices/me/rpc/request/+");
+}
+
+void HandleMqttData(char* topic, uint8_t* data, unsigned int length) {
+  data[length] = '\0';
+  String jsonStr = String((char*)data);
+
+  StaticJsonDocument<256> doc;
+  DeserializationError error = deserializeJson(doc, jsonStr);
+  if (error) {
+    Serial.printf("JSON error: %s\n", error.c_str());
+    return;
+  }
+
+  // Nếu có cảnh báo
+  if (doc.containsKey("method") && doc["method"] == "alarm") {
+    if (doc.containsKey("params")) {
+      latest_alert_msg = doc["params"].as<String>();
+    }
+  }
+}
+
 
 void CustomLVGL_InitUI() {
  
-    /*Create a Tab view object*/
-  lv_obj_t * tabview;
-  tabview = lv_tabview_create(lv_scr_act());
+  /*Create a Tab view object*/
+  
+  lv_obj_t * tabview = lv_tabview_create(lv_scr_act());
 
-  // Ẩn thanh tab để tiết kiệm không gian
+  // Ẩn thanh tab
   lv_obj_add_flag(lv_tabview_get_tab_bar(tabview), LV_OBJ_FLAG_HIDDEN);
 
-  // Cho phép vuốt màn hình để chuyển tab
-  lv_obj_add_flag(tabview, LV_OBJ_FLAG_GESTURE_BUBBLE);
-
-    /*3 tabs*/
+  /*tabs*/
   lv_obj_t * tab1 = lv_tabview_add_tab(tabview, "Tab 1");
   lv_obj_t * tab2 = lv_tabview_add_tab(tabview, "Tab 2");
   lv_obj_t * tab3 = lv_tabview_add_tab(tabview, "Tab 3");
-  
+  lv_obj_t * tab4 = lv_tabview_add_tab(tabview, "Tab 4");
+
 
 // thanh bar
   lv_obj_t *top_bar = lv_obj_create(lv_scr_act());
   lv_obj_set_size(top_bar, LV_HOR_RES, 35);  
-  lv_obj_set_style_bg_color(top_bar, lv_color_hex(0x4A90E2), 0);  
+  lv_obj_set_style_bg_color(top_bar, lv_color_hex(0xB4B4B4), 0);  
+  lv_obj_set_style_border_opa(top_bar, LV_OPA_TRANSP, 0);
   lv_obj_set_style_bg_opa(top_bar, LV_OPA_COVER, 0);
-  lv_obj_set_align(top_bar, LV_ALIGN_TOP_MID);  
+  lv_obj_align(top_bar, LV_ALIGN_TOP_MID, 0, 0);  
 
     //hiển thị thời gian
   lv_obj_t *time_container = lv_obj_create(top_bar);
-  lv_obj_set_size(time_container, 200, 30);  
+  lv_obj_set_size(time_container, 220, 35);  
   lv_obj_set_style_pad_all(time_container, 0, 0);
   lv_obj_set_style_border_opa(time_container, LV_OPA_TRANSP, 0);
   lv_obj_set_style_shadow_opa(time_container, LV_OPA_TRANSP, 0);
   lv_obj_set_style_bg_opa(time_container, LV_OPA_TRANSP, 0);
-  lv_obj_align(time_container, LV_ALIGN_TOP_LEFT, -10, 5);
+  lv_obj_align(time_container, LV_ALIGN_TOP_LEFT, -20, -13);
 
   time_label = lv_label_create(time_container);
   lv_obj_align(time_label, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_text_font(time_label, &lv_font_montserrat_20, 0); 
+  lv_obj_set_style_text_font(time_label, &lv_font_montserrat_tasmota_20, 0); 
   lv_timer_create(update_time_label, 1000, NULL);
 
   // wifi
   lv_obj_t *wifi_container = lv_obj_create(top_bar);
-  lv_obj_set_size(wifi_container, 30, 30);  
+  lv_obj_set_size(wifi_container, 33, 33);  
   lv_obj_set_style_pad_all(wifi_container, 0, 0);
   lv_obj_set_style_border_opa(wifi_container, LV_OPA_TRANSP, 0);
   lv_obj_set_style_shadow_opa(wifi_container, LV_OPA_TRANSP, 0);
   lv_obj_set_style_bg_opa(wifi_container, LV_OPA_TRANSP, 0);
-  lv_obj_align(wifi_container, LV_ALIGN_TOP_RIGHT, -10, 5);
+  lv_obj_align(wifi_container, LV_ALIGN_TOP_RIGHT, 0, -14);
 
   wifi_icon = lv_img_create(wifi_container);
+  lv_obj_set_size(wifi_icon, 25, 25);  
   lv_obj_align(wifi_icon, LV_ALIGN_CENTER, 0, 0);
 
+    // BK icon
+  lv_obj_t *bk_container = lv_obj_create(top_bar);
+  lv_obj_set_size(bk_container, 33, 33);  
+  lv_obj_set_style_pad_all(bk_container, 0, 0);
+  lv_obj_set_style_border_opa(bk_container, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_shadow_opa(bk_container, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_opa(bk_container, LV_OPA_TRANSP, 0);
+  lv_obj_align(bk_container, LV_ALIGN_TOP_RIGHT, -35, -14);
+     
+  lv_obj_t *bk_icon = lv_img_create(bk_container);
+  lv_img_set_src(bk_icon, &hcmut);
+  lv_obj_set_size(bk_icon, 25, 25);  
+  lv_obj_align(bk_icon, LV_ALIGN_CENTER, 0, 0);
+
   //--------------Trang 1:-------------------
-  lv_obj_t *screen1;
-  screen1 = lv_obj_create(tab1);
-  lv_obj_set_size(screen1, 310, 480);
-  lv_obj_set_style_bg_color(screen1, lv_color_hex(0x201861), LV_PART_MAIN);
-  lv_obj_align(screen1, LV_ALIGN_TOP_LEFT, -15, -15);
+
+  lv_obj_set_style_bg_color(tab1, lv_color_hex(0x201861), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(tab1, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
   lv_obj_t *rect1 = lv_obj_create(tab1);
   lv_obj_set_size(rect1, 160, 95);
   lv_obj_set_style_bg_color(rect1, lv_color_hex(0x2379F1), 0); // Temp
+  lv_obj_set_style_border_opa(rect1, LV_OPA_TRANSP, 0);
   lv_obj_set_style_radius(rect1, 15, 0);
-  lv_obj_align(rect1, LV_ALIGN_TOP_LEFT, 5, 25);
+  lv_obj_align(rect1, LV_ALIGN_TOP_LEFT, -1, 25);
 
+  temp_label = lv_label_create(rect1);
+  lv_obj_set_style_text_font(temp_label, &lv_font_montserrat_tasmota_28, 0);
+  lv_obj_align(temp_label, LV_ALIGN_LEFT_MID, 0, -15);
 
-  lv_obj_t *temp_label = lv_label_create(rect1);
-  lv_obj_set_style_text_font(temp_label, &lv_font_montserrat_22, 0);
-  lv_obj_align(temp_label, LV_ALIGN_LEFT_MID, 5, -5);
+  lv_obj_t *C = lv_label_create(rect1);
+  lv_label_set_text(C, "°C");
+  lv_obj_set_style_text_font(C, &lv_font_montserrat_tasmota_28, 0);
+  lv_obj_align(C, LV_ALIGN_LEFT_MID, 10, 15);
 
   lv_obj_t *dash = lv_label_create(rect1);
-  lv_label_set_text(dash, "         |");
-  lv_obj_set_style_text_font(dash, &lv_font_montserrat_22, 0);
-  lv_obj_align(dash, LV_ALIGN_LEFT_MID, 5, 0);
+  lv_label_set_text(dash, "       |");
+  lv_obj_set_style_text_font(dash, &lv_font_montserrat_tasmota_28, 0);
+  lv_obj_align(dash, LV_ALIGN_LEFT_MID, 5, 10);
 
   lv_obj_t *weather_icon = lv_img_create(rect1);
   lv_img_set_src(weather_icon, &weathe);  
-  lv_obj_align(weather_icon, LV_ALIGN_RIGHT_MID, -5, -2);
-
-
+  lv_obj_align(weather_icon, LV_ALIGN_RIGHT_MID, 0, -2);
+ 
   lv_obj_t *rect2 = lv_obj_create(tab1);
-  lv_obj_set_size(rect2, 110, 95);
-  lv_obj_set_style_bg_color(rect2, lv_color_hex(0x46DCAE), 0); // green
+  lv_obj_set_size(rect2, 125, 95);
+  lv_obj_set_style_bg_color(rect2, lv_color_hex(0x46DCAE), 0); // so2
+  lv_obj_set_style_border_opa(rect2, LV_OPA_TRANSP, 0);
   lv_obj_set_style_radius(rect2, 15, 0);
-  lv_obj_align(rect2, LV_ALIGN_TOP_RIGHT, -5, 25);
+  lv_obj_align(rect2, LV_ALIGN_TOP_RIGHT, 0, 25);
+
+  lv_obj_t *so2_icon = lv_img_create(rect2);
+  lv_img_set_src(so2_icon, &co2);  
+  lv_obj_align(so2_icon, LV_ALIGN_CENTER, 0, 0);
+
+  so2_label = lv_label_create(rect2);
+  lv_obj_set_style_text_font(so2_label, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_color(so2_label, lv_color_hex(0x32CD32), 0);
+  lv_obj_align(so2_label, LV_ALIGN_CENTER, 0, 5);
+  
+  lv_obj_t *ppm = lv_label_create(rect2);
+  lv_label_set_text(ppm, "PPM");
+  lv_obj_set_style_text_font(ppm, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_color(ppm, lv_color_hex(0x46DCAE), 0);
+  lv_obj_align(ppm, LV_ALIGN_CENTER, 0, 21);
 
   lv_obj_t *rect3 = lv_obj_create(tab1);
   lv_obj_set_size(rect3, 140, 95);
-  lv_obj_set_style_bg_color(rect3, lv_color_hex(0x49BAEC), 0); // blue
+  lv_obj_set_style_bg_color(rect3, lv_color_hex(0x49BAEC), 0); // ac measure
+  lv_obj_set_style_border_opa(rect3, LV_OPA_TRANSP, 0);
   lv_obj_set_style_radius(rect3, 15, 0);
-  lv_obj_align(rect3, LV_ALIGN_BOTTOM_LEFT, 5, 5);
+  lv_obj_align(rect3, LV_ALIGN_BOTTOM_LEFT, -1, 5);
+
+  lv_obj_t *ac_icon = lv_img_create(rect3);
+  lv_img_set_src(ac_icon, &ac);  
+  lv_obj_align(ac_icon, LV_ALIGN_LEFT_MID, -10, 10);
+
+  lv_obj_t *actext = lv_label_create(rect3);
+  lv_label_set_text(actext, "AC measure");
+  lv_obj_set_style_text_font(actext, &lv_font_montserrat_18, 0);
+  lv_obj_align(actext, LV_ALIGN_LEFT_MID, 0, -32);
+
+  ac_label = lv_label_create(rect3);
+  lv_obj_set_style_text_font(ac_label, &lv_font_montserrat_tasmota_20, 0);
+  lv_obj_align(ac_label, LV_ALIGN_RIGHT_MID, 0, -10);
+
+  lv_obj_t *A = lv_label_create(rect3);
+  lv_label_set_text(A, "A");
+  lv_obj_set_style_text_font(A, &lv_font_montserrat_tasmota_20, 0);
+  lv_obj_align(A, LV_ALIGN_RIGHT_MID, -10, 20);
 
   lv_obj_t *rect4 = lv_obj_create(tab1);
-  lv_obj_set_size(rect4, 130, 95);
-  lv_obj_set_style_bg_color(rect4, lv_color_hex(0x8990F2), 0); // tím
+  lv_obj_set_size(rect4, 145, 95);
+  lv_obj_set_style_bg_color(rect4, lv_color_hex(0x8990F2), 0); // humi
+  lv_obj_set_style_border_opa(rect4, LV_OPA_TRANSP, 0);
   lv_obj_set_style_radius(rect4, 15, 0);
-  lv_obj_align(rect4, LV_ALIGN_BOTTOM_RIGHT, -5, 5);
+  lv_obj_align(rect4, LV_ALIGN_BOTTOM_RIGHT, 0, 5);
 
-  //--------------Trang 2:-------------------
-  lv_obj_t *screen2;
-  screen2 = lv_obj_create(tab2);
-  lv_obj_set_size(screen2, 320, 480);
-  lv_obj_set_style_bg_color(screen2, lv_color_hex(0x243061), LV_PART_MAIN);
-  lv_obj_align(screen2, LV_ALIGN_TOP_LEFT, -15, -15);
+  lv_obj_t *humi_icon = lv_img_create(rect4);
+  lv_img_set_src(humi_icon, &humi);  
+  lv_obj_align(humi_icon, LV_ALIGN_LEFT_MID, -10, 10);
+
+  lv_obj_t *humitext = lv_label_create(rect4);
+  lv_label_set_text(humitext, "Humidity");
+  lv_obj_set_style_text_font(humitext, &lv_font_montserrat_18, 0);
+  lv_obj_align(humitext, LV_ALIGN_LEFT_MID, 0, -32);
+
+  humi_label = lv_label_create(rect4);
+  lv_obj_set_style_text_font(humi_label, &lv_font_montserrat_tasmota_20, 0);
+  lv_obj_align(humi_label, LV_ALIGN_RIGHT_MID, -5, -10);
+
+  lv_obj_t *humic = lv_label_create(rect4);
+  lv_label_set_text(humic, "%");
+  lv_obj_set_style_text_font(humic, &lv_font_montserrat_tasmota_28, 0);
+  lv_obj_align(humic, LV_ALIGN_RIGHT_MID, -10, 20);
+
+    //--------------Trang 2:-------------------
+  lv_obj_set_style_bg_color(tab2, lv_color_hex(0x201861), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(tab2, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+  lv_obj_t *block1 = lv_obj_create(tab2);
+  lv_obj_set_size(block1, 295, 95);
+  lv_obj_set_style_bg_color(block1, lv_color_hex(0x2379F1), 0); // ozone
+  lv_obj_set_style_border_opa(block1, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_radius(block1, 15, 0);
+  lv_obj_align(block1, LV_ALIGN_TOP_LEFT, -1, 25);
+
+  lv_obj_t *ozonetext = lv_label_create(block1);
+  lv_label_set_text(ozonetext, "Ozone");
+  lv_obj_set_style_text_font(ozonetext, &lv_font_montserrat_tasmota_28, 0);
+  lv_obj_align(ozonetext, LV_ALIGN_RIGHT_MID, -80, -15);
+
+  ozone_label = lv_label_create(block1);
+  lv_obj_set_style_text_font(ozone_label, &lv_font_montserrat_tasmota_20, 0);
+  lv_obj_align(ozone_label, LV_ALIGN_RIGHT_MID, -120, 15);
+
+  lv_obj_t *ozonec = lv_label_create(block1);
+  lv_label_set_text(ozonec, "current");
+  lv_obj_set_style_text_font(ozonec, &lv_font_montserrat_tasmota_20, 0);
+  lv_obj_align(ozonec, LV_ALIGN_RIGHT_MID, -20, 15);
+
+  lv_obj_t *ozone_icon = lv_img_create(block1);
+  lv_img_set_src(ozone_icon, &ozone);  
+  lv_obj_align(ozone_icon, LV_ALIGN_LEFT_MID, 0, -2);
+
+  lv_obj_t *block2 = lv_obj_create(tab2);
+  lv_obj_set_size(block2, 140, 95);
+  lv_obj_set_style_bg_color(block2, lv_color_hex(0x49BAEC), 0); // no2
+  lv_obj_set_style_border_opa(block2, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_radius(block2, 15, 0);
+  lv_obj_align(block2, LV_ALIGN_BOTTOM_LEFT, -1, 5);
+
+  lv_obj_t *no2_icon = lv_img_create(block2);
+  lv_img_set_src(no2_icon, &No2);  
+  lv_obj_align(no2_icon, LV_ALIGN_LEFT_MID, -5, 0);
+
+  no2_label = lv_label_create(block2);
+  lv_obj_set_style_text_font(no2_label, &lv_font_montserrat_tasmota_20, 0);
+  lv_obj_align(no2_label, LV_ALIGN_RIGHT_MID, 0, -15);
+
+  lv_obj_t *ppmno2 = lv_label_create(block2);
+  lv_label_set_text(ppmno2, "ppm");
+  lv_obj_set_style_text_font(ppmno2, &lv_font_montserrat_tasmota_20, 0);
+  lv_obj_align(ppmno2, LV_ALIGN_RIGHT_MID, 0, 15);
+
+  lv_obj_t *block3 = lv_obj_create(tab2);
+  lv_obj_set_size(block3, 145, 95);
+  lv_obj_set_style_bg_color(block3, lv_color_hex(0x46DCAE), 0); // co
+  lv_obj_set_style_border_opa(block3, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_radius(block3, 15, 0);
+  lv_obj_align(block3, LV_ALIGN_BOTTOM_RIGHT, 0, 5);
+
+  lv_obj_t *co_icon = lv_img_create(block3);
+  lv_img_set_src(co_icon, &Co);  
+  lv_obj_align(co_icon, LV_ALIGN_LEFT_MID, -5, 0);
+
+  co_label = lv_label_create(block3);
+  lv_obj_set_style_text_font(co_label, &lv_font_montserrat_tasmota_20, 0);
+  lv_obj_align(co_label, LV_ALIGN_RIGHT_MID, 0, -15);
+
+  lv_obj_t *ppmco = lv_label_create(block3);
+  lv_label_set_text(ppmco, "ppm");
+  lv_obj_set_style_text_font(ppmco, &lv_font_montserrat_tasmota_20, 0);
+  lv_obj_align(ppmco, LV_ALIGN_RIGHT_MID, 0, 15);
+
+    //--------------Trang 3:-------------------
+  lv_obj_set_style_bg_color(tab3, lv_color_hex(0x201861), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(tab3, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+  
+  lv_obj_t *part1 = lv_obj_create(tab3);
+  lv_obj_set_size(part1, 143, 180);
+  lv_obj_set_style_bg_color(part1, lv_color_hex(0x2379F1), 0); // 2.5
+  lv_obj_set_style_border_opa(part1, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_radius(part1, 15, 0);
+  lv_obj_align(part1, LV_ALIGN_TOP_LEFT, -1, 25);
+  
+  lv_obj_t *ppm25_icon = lv_img_create(part1);
+  lv_img_set_src(ppm25_icon, &pm2);  
+  lv_obj_align(ppm25_icon, LV_ALIGN_TOP_MID, 0, 0);
+
+  lv_obj_t *part2 = lv_obj_create(tab3);
+  lv_obj_set_size(part2, 143, 180);
+  lv_obj_set_style_bg_color(part2, lv_color_hex(0x46DCAE), 0); // 10
+  lv_obj_set_style_border_opa(part2, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_radius(part2, 15, 0);
+  lv_obj_align(part2, LV_ALIGN_TOP_RIGHT, 0, 25);
+
+  lv_obj_t *ppm10_icon = lv_img_create(part2);
+  lv_img_set_src(ppm10_icon, &pm10);  
+  lv_obj_align(ppm10_icon, LV_ALIGN_TOP_MID, 0, 0);
+
+  //--------------Trang 4:-------------------
+
+  lv_obj_set_style_bg_color(tab4, lv_color_hex(0x201861), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(tab4, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+  create_relay_controls(tab4);
 
 
   update_wifi_icon(); 
   update_temp_label();
-
+  
+  CustomLVGL_StartMonitoring();
 }
 
-// Hàm cập nhật nhiệt độ
+void create_relay_controls(lv_obj_t *parent) {
+  lv_obj_set_style_pad_top(parent, 30, 0);  
+
+  static bool relay_states[4] = {false, false, false, false};
+
+  for (int i = 0; i < 4; i++) {
+    // Container
+    lv_obj_t *container = lv_obj_create(parent);
+    lv_obj_set_size(container, 120, 90); 
+    lv_obj_set_style_pad_all(container, 5, 0); 
+    lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Xếp 
+    int row = i / 2;
+    int col = i % 2;
+    lv_obj_align(container, LV_ALIGN_TOP_LEFT, 25 + col * 130, 10 + row * 100);
+
+    // 
+    char label[16];
+    snprintf(label, sizeof(label), "Relay %d", i + 1);
+    lv_obj_t *lbl = lv_label_create(container);
+    lv_label_set_text(lbl, label);
+    lv_obj_align(lbl, LV_ALIGN_TOP_MID, 5, 0);
+
+    // Button ON/OFF
+    lv_obj_t *btn = lv_btn_create(container);
+    lv_obj_set_size(btn, 100, 50);
+    lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, 0); // 
+
+    lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_RED), 0);
+
+    lv_obj_t *btn_label = lv_label_create(btn);
+    lv_label_set_text(btn_label, "OFF");
+    lv_obj_center(btn_label); 
+
+    // Event handler
+    lv_obj_add_event_cb(btn, [](lv_event_t *e) {
+      lv_obj_t *btn = (lv_obj_t *)lv_event_get_target(e);
+      int idx = lv_obj_get_index(lv_obj_get_parent(btn)); 
+
+      relay_states[idx] = !relay_states[idx];
+      lv_obj_t *btn_lbl = lv_obj_get_child(btn, 0);
+      lv_label_set_text(btn_lbl, relay_states[idx] ? "ON" : "OFF");
+
+      lv_color_t color = relay_states[idx] ? 
+                         lv_palette_main(LV_PALETTE_GREEN) :
+                         lv_palette_main(LV_PALETTE_RED);
+      lv_obj_set_style_bg_color(btn, color, 0);
+
+      //control
+    }, LV_EVENT_CLICKED, NULL);
+  }
+}
+
+// Box
+void display_alert(const char *message) {
+  if (is_alert_active) return;  
+  is_alert_active = true;
+
+lv_obj_t *alert_popup = lv_msgbox_create(lv_scr_act());
+lv_obj_set_width(alert_popup, 240);  
+
+static lv_style_t style_box, style_text;
+lv_style_init(&style_box);
+lv_style_set_bg_color(&style_box, lv_color_hex(0xFFFF99));  // nền vàng nhạt
+lv_style_set_border_width(&style_box, 2);
+lv_style_set_border_color(&style_box, lv_color_hex(0xFFAA00));
+
+lv_style_init(&style_text);
+lv_style_set_text_color(&style_text, lv_color_hex(0xCC0000));  // đỏ
+lv_style_set_bg_color(&style_text, lv_color_hex(0xFFFF99));
+lv_style_set_text_align(&style_text, LV_TEXT_ALIGN_CENTER);
+
+lv_obj_add_style(alert_popup, &style_box, 0);
+
+lv_obj_t *header = lv_obj_create(alert_popup);
+lv_obj_set_width(header, lv_pct(100));
+lv_obj_set_height(header, 30);
+lv_obj_set_style_bg_color(header, lv_color_hex(0xFFFF66), 0);  // vàng đậm
+lv_obj_set_style_pad_all(header, 0, 0);
+lv_obj_set_style_border_width(header, 0, 0);
+lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+
+lv_obj_t *title = lv_label_create(header);
+lv_label_set_text(title, "Warning");
+lv_obj_set_style_text_color(title, lv_color_hex(0xCC0000), 0);
+lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+lv_obj_center(title);
+
+lv_obj_move_to_index(header, 0);
+
+//message text
+lv_obj_t *text = lv_msgbox_add_text(alert_popup, message);
+lv_obj_add_style(text, &style_text, 0);
+
+lv_obj_t *ok_btn = lv_msgbox_add_footer_button(alert_popup, "OK");
+  lv_obj_add_event_cb(ok_btn, [](lv_event_t * e) {
+      lv_obj_t *alert_popup = (lv_obj_t *)lv_event_get_user_data(e); 
+      lv_obj_del(alert_popup);   
+      is_alert_active = false;
+  }, LV_EVENT_CLICKED, alert_popup);  
+  
+  lv_obj_center(alert_popup);
+}
+
+void sensor_check_task(lv_timer_t *timer) {
+if (!is_alert_active && latest_alert_msg.length() > 0) {
+    display_alert(latest_alert_msg.c_str());
+    latest_alert_msg = ""; 
+  }
+}
+
+
+void CustomLVGL_StartMonitoring() {
+  lv_timer_create(sensor_check_task, 10000, NULL);  
+}
+
+// 
 void update_temp_label() {
+  
   if (Dht20.valid) {  
       char temp_str[32];
-      snprintf(temp_str, sizeof(temp_str), "%.1f°C |", Dht20.temperature);
+      snprintf(temp_str, sizeof(temp_str), "%.1f |", Dht20.temperature);
       lv_label_set_text(temp_label, temp_str);
   }
 }
 
+
 int get_wifi_signal_strength() {
   int rssi = WiFi.RSSI();
-    
-    if (rssi > -50) return 4;  
-    if (rssi > -60) return 3;  
-    if (rssi > -70) return 2;    
-    return 1;  
+  if (rssi > -50) return 4;  
+  if (rssi > -60) return 3;     
+  return 2;  
     
 }
 
 void update_time_label(lv_timer_t *timer) {
-  setenv("TZ", "UTC-7", 1);  
+  setenv("TZ", "UTC-6", 1);  
   tzset();
   char time_str[32];
   time_t now;
@@ -202,7 +523,11 @@ void update_time_label(lv_timer_t *timer) {
   time(&now);
   localtime_r(&now, &timeinfo);
   
-  snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  // HH:MM:SS - DD/MM/YY
+  snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d - %02d/%02d/%02d",
+  timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
+  timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year - 100);
+
   lv_label_set_text(time_label, time_str);
 }
 
@@ -212,8 +537,7 @@ void update_wifi_icon() {
     switch(signal_level) {
         case 4: lv_img_set_src(wifi_icon, &W4); break;
         case 3: lv_img_set_src(wifi_icon, &W3); break;
-        case 2: lv_img_set_src(wifi_icon, &W2); break;
-        default: lv_img_set_src(wifi_icon, &W1); break;
+        default: lv_img_set_src(wifi_icon, &W2); break;
     }
 }
 
@@ -224,7 +548,7 @@ void CustomLVGL_Initialize() {
     CustomLVGL_InitUI();
   }
 }
-// >>>> END CUSTOM CODE ADDITION <<<<
+// >>>> END CUSTOM CODE <<<<
 
 // **************************************************
 // Logging
@@ -759,8 +1083,7 @@ void LvglDrvLoop(void) {
 
 // Register the driver with Tasmota
 
-bool Xdrv54(uint32_t function) {
-  bool result = false;
+bool Xdrv54(uint32_t function){
 
   switch (function) {
     case FUNC_INIT:
@@ -769,9 +1092,14 @@ bool Xdrv54(uint32_t function) {
     case FUNC_LOOP:
       LvglDrvLoop();
       break;
+    case FUNC_MQTT_SUBSCRIBE:             
+      LvglMqttSubscribe();                  
+      break;
   }
+
   return false;
 }
+
 
 
 #endif  // defined(USE_LVGL) && defined(USE_UNIVERSAL_DISPLAY)

@@ -586,6 +586,11 @@ void MqttDataHandler(char* mqtt_topic, uint8_t* mqtt_data, unsigned int data_len
     }
   }
 
+  if (strstr(mqtt_topic, "v1/devices/me/rpc/request") != nullptr) {
+    HandleMqttData(mqtt_topic, mqtt_data, data_len);
+ }
+
+
 #ifdef USE_MQTT_FILE
   FMqtt.topic_size = strlen(mqtt_topic);
 #endif  // USE_MQTT_FILE
